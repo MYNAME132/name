@@ -4,8 +4,9 @@ const multer = require('multer');
 const path = require('path');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const app = express();
+const { log } = require('console');
 
+const app = express();
 const port = 4000;
 
 // Middleware
@@ -113,6 +114,13 @@ app.post('/addproduct', async (req, res) => {
     });
 });
 
+app.get('/newcollections',async(req,res)=>{
+    let products=await Product.find({});
+    let newcollection=products.slice(1).slice(-8);
+    console.log("new collection fetched")
+    res.send(newcollection);
+})
+
 app.post('/removeproduct', async (req, res) => {
     await Product.findOneAndDelete({ id: req.body.id });
     console.log("removed");
@@ -196,6 +204,51 @@ app.post('/login', async (req, res) => {
     const token = jwt.sign(data, 'secret_ecom');
     res.json({ success: true, token });
 });
+
+
+const fetchUser=async (req,res,next)=>{
+    const token=req.header('auth-token');
+    if(!token){
+        res.status(401).send({errors:"not valid token"})
+    }
+    else{
+        try{
+            const data=jwt.verify(token,'secret_ecom');
+            req.user=data.user;
+            next();
+        }catch(error){
+            res.status(401).send({errors:'not valid token'})
+        }
+    }
+}
+
+app.post('/addtocart', fetchUser, async (req, res) => {
+    console.log(req.body);
+
+
+    let userData = await User.findOne({ _id: req.user.id });
+
+    userData.cartData[req.body.itemid] += 1;
+    await User.findOneAndUpdate({ _id: req.user.id }, { cartData: userData.cartData });
+    res.json({ message: 'added' });
+});
+
+app.post('/removefromcart',fetchUser,async(req,res)=>{
+    console.log(req.body);
+
+    let userData = await User.findOne({ _id: req.user.id });
+
+    if(userData.cartData[req.body.itemid]>0)
+    userData.cartData[req.body.itemid] -= 1;
+    await User.findOneAndUpdate({ _id: req.user.id }, { cartData: userData.cartData });
+    res.json({ message: 'removed' });
+});
+
+app.post('/getcart',fetchUser,async(req,res)=>{
+    console.log("getcart");
+    let userData=await User.findOne({_id:req.user.id});
+    res.json(userData.cartData);
+})
 
 app.listen(port, (error) => {
     if (!error) {
